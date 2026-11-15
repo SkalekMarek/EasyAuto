@@ -3,7 +3,6 @@ import {
   examQuestions, examResult, matchesSearch, mistakes, newState, normalize, practiceQuestions,
   questionStats, readiness, statusOf, summarize,
 } from './model.js';
-import { bookmarklet, importResult, isResultUrl, resultHosts } from './imports.js';
 
 const $ = (selector, root = document) => root.querySelector(selector);
 const main = $('#main');
@@ -11,9 +10,9 @@ const dialog = $('#dialog');
 const storageKey = 'easyauto-progress-v1';
 const mediaQuery = matchMedia('(prefers-color-scheme: dark)');
 const navigation = [
-  ['prehled', 'Přehled', '▦'], ['procvicovani', 'Procvičování', '◎'], ['chybovnik', 'Chybovník', '↺'],
-  ['nerozumim', 'Nerozumím', '?'], ['zkouska', 'Cvičná zkouška', '◷'], ['otazky', 'Otázky', '☷'],
-  ['historie', 'Historie testů', '≡'], ['import', 'Import z eTestů', '↓'],
+  ['prehled', 'Přehled', 'map'], ['procvicovani', 'Procvičování', 'target'], ['chybovnik', 'Chybovník', 'retry'],
+  ['nerozumim', 'Nerozumím', 'help'], ['zkouska', 'Cvičná zkouška', 'flag'], ['otazky', 'Otázky', 'book'],
+  ['historie', 'Historie testů', 'history'],
 ];
 
 let state = newState();
@@ -21,7 +20,6 @@ let bank;
 let bulletin;
 let groupB;
 let byId;
-let ministryIds;
 let stats;
 let practice;
 let modal;
@@ -32,14 +30,13 @@ let catalog = { search: '', topic: 'all', status: 'all', scope: 'all', view: 'li
 let mapFilter = 'all';
 let mistakeTopic = 'all';
 let historyFilter = 'all';
-let lastOpenedResult;
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({
   '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
 })[char]);
 const route = () => {
   const [page, sub] = location.hash.slice(1).split('/');
-  return page && page !== 'main' ? [page, sub] : ['prehled'];
+  return navigation.some(([id]) => id === page) ? [page, sub] : ['prehled'];
 };
 const go = page => { location.hash = page; };
 const getStatus = id => statusOf(stats.get(id));
@@ -55,8 +52,9 @@ const link = (page, text, primary = false) => `<a class="button${primary ? ' pri
 const button = (action, text, { value = '', style = '', disabled = false } = {}) =>
   `<button type="button" class="${style}" data-action="${action}" data-value="${esc(value)}" ${disabled ? 'disabled' : ''}>${esc(text)}</button>`;
 const empty = text => `<p class="empty">${esc(text)}</p>`;
+const sprite = name => `<span class="sprite sprite-${name}" aria-hidden="true"></span>`;
 const heading = (title, subtitle, actions = '') =>
-  `<header class="page-heading"><div><h1>${esc(title)}</h1><p class="muted">${esc(subtitle)}</p></div><div class="tools">${actions}</div></header>`;
+  `<header class="page-heading"><div><h1>${esc(title)}</h1><p class="muted">${esc(subtitle)}</p></div>${actions ? `<div class="tools">${actions}</div>` : ''}</header>`;
 const markFor = id => state.flagged.includes(id);
 const flagButton = q => `<button type="button" data-action="flag" data-value="${q.id}" aria-pressed="${markFor(q.id)}">${markFor(q.id) ? 'Odebrat z Nerozumím' : 'Nerozumím'}</button>`;
 
@@ -83,9 +81,11 @@ function updateTheme() {
 function navMarkup(current) {
   const wrong = bank.exam.filter(q => getStatus(q.id) === 'wrong').length;
   $('#navigation').innerHTML = navigation.map(([id, title, icon]) => {
-    const tally = { chybovnik: wrong, nerozumim: state.flagged.length, zkouska: state.exam ? '•' : null }[id];
+    const tally = { chybovnik: wrong, nerozumim: state.flagged.length }[id];
+    const activeExam = id === 'zkouska' && state.exam
+      ? '<span class="nav-running" aria-label="Zkouška probíhá" title="Zkouška probíhá"></span>' : '';
     return `<a href="#${id}" ${current === id ? 'aria-current="page"' : ''}>
-      <span class="nav-icon" aria-hidden="true">${icon}</span><span>${title}</span>${tally ? label('unseen', tally) : ''}</a>`;
+      ${sprite(icon)}<span>${title}</span>${tally ? label('unseen', tally) : ''}${activeExam}</a>`;
   }).join('');
   $('#profile-button').textContent = state.profile.name || 'Můj profil';
 }
@@ -105,9 +105,11 @@ function mediaMarkup(media, { thumbnail = false } = {}) {
 }
 
 function questionMarkup(question, selected, reveal, action, disabled = false) {
-  return `<p class="question-text">${esc(question.question)}</p>
-    ${question.media.map(item => mediaMarkup(item)).join('')}
-    <div class="stack" aria-label="Možnosti odpovědi">
+  return `<div class="question-prompt">
+      <p class="question-text">${esc(question.question)}</p>
+      ${question.media.map(item => mediaMarkup(item)).join('')}
+    </div>
+    <div class="stack question-answers" aria-label="Možnosti odpovědi">
       ${question.answers.map((answer, index) => {
         const chosen = selected === answer.label;
         const good = reveal && answer.label === question.correct_answer;
@@ -154,27 +156,37 @@ function overview() {
       return `<a href="#historie/${esc(t.id)}" class="${t.score >= t.passScore ? '' : 'wrong'}" style="height:${percentage}%" aria-label="${title}" title="${title}"></a>`;
     }).join('')}</div><small>Přerušovaná čára označuje 43 bodů z 50.</small>`
     : empty('Po prvním testu tady uvidíš vývoj skóre.');
-  return `${heading('Přehled', 'Pokrok v otázkách a připravenost na zkoušku skupiny B.',
-      link('procvicovani', 'Procvičovat') + link('zkouska', state.exam ? 'Pokračovat ve zkoušce' : 'Cvičná zkouška', true))}
-    <div class="stack">
-      <div class="grid grid-3">
-        ${[['unseen', 'Nezodpovězené'], ['wrong', 'V chybovníku'], ['known', 'Zvládnuté']].map(([id, title]) =>
-          `<a class="panel metric" href="#otazky/${id}"><span>${title}</span><strong>${count(totals[id])}</strong><small>Zobrazit otázky →</small></a>`).join('')}
+  return `<header class="overview-hero">
+      <div class="hero-copy">
+        <h1>Přehled</h1>
+        <p>Pokrok v otázkách a připravenost na zkoušku skupiny B.</p>
+        <div class="tools">${link('procvicovani', 'Procvičovat', true)}
+          ${link('zkouska', state.exam ? 'Pokračovat ve zkoušce' : 'Cvičná zkouška')}</div>
       </div>
-      <div class="grid">
+      <div class="hero-scene" aria-hidden="true"><img src="./assets/arcade-road.png" alt="" width="160" height="88"></div>
+    </header>
+    <div class="stack">
+      <div class="grid grid-3 metric-grid">
+        ${[['unseen', 'Nezodpovězené', 'help'], ['wrong', 'V chybovníku', 'cross'], ['known', 'Zvládnuté', 'check']].map(([id, title, icon]) =>
+          `<a class="panel metric metric-${id}" href="#otazky/${id}">
+            <span class="metric-icon">${sprite(icon)}</span><span class="metric-copy"><span>${title}</span>
+              <strong>${count(totals[id])}</strong><small>Zobrazit otázky <span class="pixel-arrow" aria-hidden="true"></span></small>
+            </span></a>`).join('')}
+      </div>
+      <div class="grid overview-score">
         <section class="panel readiness stack">
           <h2>Odhad skóre · skupina B</h2>
           <div><span class="readiness-number">${estimate}</span> <span class="muted">/ 50 bodů</span></div>
           <progress class="bar" value="${estimate}" max="50" aria-label="Odhad skóre"></progress>
-          <p>${estimate >= PASS_SCORE ? 'Odhad je nad hranicí pro úspěch.' : `Do hranice 43 bodů zbývá ${PASS_SCORE - estimate}.`}</p>
+          <p>${estimate >= PASS_SCORE ? 'Odhad dosahuje hranice pro úspěch.' : `Do hranice 43 bodů zbývá ${PASS_SCORE - estimate}.`}</p>
           <small>Největší prostor ke zlepšení · ${TOPICS.get(weak.topic)}</small>
         </section>
-        <section class="panel stack"><h2>Odhad podle témat</h2><div class="list">
+        <section class="panel score-topics"><h2>Odhad podle témat</h2><div class="list">
           ${topics.map(t => `<a class="list-row listed" href="#procvicovani/${t.topic}"><span>${TOPICS.get(t.topic)}</span>
             <strong>${t.estimated.toLocaleString('cs-CZ', { maximumFractionDigits: 1 })} / ${t.max}</strong></a>`).join('')}
         </div></section>
       </div>
-      <section class="panel">
+      <section class="panel map-panel">
         <div class="row between"><h2>Mapa všech ${count(bank.exam.length)} otázek</h2><div class="row">
           <label for="map-filter" class="muted">Zobrazit</label><select id="map-filter">
               ${options(statusFilters, mapFilter)}
@@ -256,8 +268,6 @@ function catalogResults() {
 function queueMarkup(flagged) {
   const questions = flagged ? [...state.flagged].reverse().map(id => byId.get(id)).filter(Boolean) : mistakes(bank.exam, stats);
   const filtered = flagged || mistakeTopic === 'all' ? questions : questions.filter(q => q.topic_id === Number(mistakeTopic));
-  const external = flagged ? [] : sortedTests().flatMap(test =>
-    test.items.filter(item => !item.id && !item.correct).map(item => ({ test, item })));
   return `${heading(flagged ? 'Nerozumím' : 'Chybovník',
     flagged ? 'Otázky, které si chceš znovu projít. Označení můžeš kdykoli odebrat.'
       : `Otázka z chybovníku zmizí po ${MASTERY_STREAK} správných odpovědích za sebou.`,
@@ -270,9 +280,7 @@ function queueMarkup(flagged) {
           <span>${esc(q.question)}</span><small>${q.id} · ${topicName(q)}</small></button>${flagButton(q)}</div>`
           : questionRow(q, `${stat.wrong}× špatně · ${stat.streak}/3 správně v řadě`);
       }).join('') : empty(flagged ? 'Zatím nemáš žádnou označenou otázku.' : 'V tomto výběru zatím nemáš žádné chyby.')}
-    </section>${external.length ? `<section class="panel"><h2>Chyby z importovaných testů</h2>
-      ${external.map(({ test, item }) => `<a class="list-row listed" href="#historie/${esc(test.id)}"><span>${esc(item.snapshot.question)}</span><small>${esc(test.title)}</small></a>`).join('')}
-    </section>` : ''}</div>`;
+    </section></div>`;
 }
 
 function practiceMenu() {
@@ -321,7 +329,10 @@ function practiceRound(mode) {
   const selected = practice.selected;
   return `${heading(title, `Otázka ${practice.index + 1} z ${practice.questions.length}`, back)}
     <section class="panel question-card stack">
-      <div class="row between"><span class="muted">${topicName(question)} · ${question.id} · ${question.points} b.</span>${flagButton(question)}</div>
+      <div class="row between question-hud">
+        <div class="row"><span class="question-code">${question.id}</span><span>${topicName(question)} · ${question.points} b.</span></div>
+        ${flagButton(question)}
+      </div>
       <progress class="bar" value="${practice.index + (selected ? 1 : 0)}" max="${practice.questions.length}" aria-label="Pokrok kola"></progress>
       ${questionMarkup(question, selected, Boolean(selected), 'practice-answer', Boolean(selected))}
       ${selected ? `<div class="row between" aria-live="polite">
@@ -356,8 +367,8 @@ function examMarkup() {
   const answered = Object.keys(exam.answers).length;
   return `${heading('Cvičná zkouška', `Otázka ${exam.index + 1} z ${exam.ids.length}`)}
     <div class="grid exam-layout">
-      <section class="panel stack">
-        <small>${topicName(q)} · ${q.id} · ${q.points} b.</small>
+      <section class="panel stack exam-question">
+        <div class="row question-hud"><span class="question-code">${q.id}</span><span>${topicName(q)} · ${q.points} b.</span></div>
         ${questionMarkup(q, exam.answers[q.id], false, 'exam-answer')}
         <div class="row between">
           ${button('exam-go', 'Předchozí', { value: exam.index - 1, disabled: exam.index === 0 })}
@@ -365,8 +376,8 @@ function examMarkup() {
             : button('exam-confirm', 'Vyhodnotit', { style: 'primary' })}
         </div>
       </section>
-      <section class="panel stack">
-        <div><small>Zbývající čas</small><div class="timer" id="timer" role="timer">${duration(timeLeft())}</div></div>
+      <section class="panel stack exam-hud">
+        <div class="timer-panel"><small>Zbývající čas</small><div class="timer" id="timer" role="timer">${duration(timeLeft())}</div></div>
         <p id="exam-count">${answered} / ${exam.ids.length} zodpovězeno</p>
         <div class="exam-grid" aria-label="Přejít na otázku">${exam.ids.map((id, index) => {
           const current = index === exam.index;
@@ -421,7 +432,7 @@ function historyMarkup(id) {
     const passed = tests.filter(t => t.score >= t.passScore).length;
     const best = Math.max(0, ...tests.map(t => Math.round(50 * t.score / t.maxScore)));
     return `${heading('Historie testů', tests.length ? `${tests.length} testů · ${passed} splněno · nejlepší výsledek ${best} / 50`
-      : 'Cvičné zkoušky a importované výsledky.', link('import', 'Importovat test'))}<section class="panel">${testRows(tests)}</section>`;
+      : 'Výsledky cvičných zkoušek.')}<section class="panel">${testRows(tests)}</section>`;
   }
   const test = tests.find(t => t.id === id);
   if (!test) return `${heading('Test nenalezen', 'Výsledek není uložený v tomto prohlížeči.', link('historie', 'Zpět do historie'))}`;
@@ -452,7 +463,7 @@ function historyMarkup(id) {
       </div></div>
         ${items.filter(({ item }) => historyFilter === 'all' || !item.correct).map(({ item, index, q }) =>
           `<div class="list-row"><button class="row-open" type="button" data-action="history-item" data-value="${index}">
-            <span>${index + 1}. ${esc(q?.question ?? item.snapshot?.question ?? 'Otázka z importu')}</span>
+            <span>${index + 1}. ${esc(q?.question ?? item.snapshot?.question ?? 'Uložená otázka')}</span>
             <small>${esc(q?.id ?? item.snapshot?.code)}${item.timeMs == null ? '' : ` · ${Math.round(item.timeMs / 1000)} s`}</small>
           </button>${label(item.correct ? 'correct' : 'wrong', item.correct ? `+${item.points} b.` : `0 / ${item.points} b.`)}</div>`).join('')
         || empty('V tomto testu nemáš žádnou chybu.')}
@@ -461,70 +472,9 @@ function historyMarkup(id) {
     </div>`;
 }
 
-function importMarkup() {
-  const url = lastOpenedResult ? esc(lastOpenedResult) : '';
-  return `${heading('Import z eTestů', 'Přidej výsledky z autoskola-testy.cz nebo z cvičné zkoušky Ministerstva dopravy.')}
-    <div class="stack">
-      <section class="panel stack"><div><h2>Odkaz na vyhodnocení</h2>
-        <p class="muted">Vlož odkaz na podrobné vyhodnocení z autoskola-testy.cz.</p></div>
-        <form id="result-url" class="row"><label class="field grow">Odkaz na výsledek
-          <input name="url" type="url" required placeholder="https://www.autoskola-testy.cz/…" value="${url}"></label>
-          <button type="submit">Načíst výsledek</button>
-        </form>
-        <p id="result-link-help" ${url ? '' : 'hidden'}>${url ? `<a href="${url}" target="_blank" rel="noopener noreferrer">Otevřít výsledek</a> a na stránce použít záložku „Do EasyAuto“.` : ''}</p>
-      </section>
-      <div class="grid">
-        <section class="panel stack"><h2>Záložka prohlížeče</h2>
-          <ol><li>Přetáhni tlačítko do lišty záložek.</li><li>Otevři podrobné vyhodnocení dokončeného testu.</li>
-            <li>Klikni na záložku. Pokud se stáhne soubor, nahraj ho zde.</li></ol>
-          <div><a class="button primary" id="bookmarklet" href="#" draggable="true">Do EasyAuto</a></div>
-        </section>
-        <section class="panel stack"><div><h2>Nahrát soubor</h2>
-          <p class="muted">Ulož detail výsledku z autoskola-testy.cz jako HTML. Přijímáme také soubory JSON ze záložky.</p></div>
-          <label class="file-drop" id="file-drop">Přetáhni soubory nebo je vyber
-            <input type="file" id="result-files" multiple accept=".html,.htm,.json,text/html,application/json"></label>
-        </section>
-      </div>
-      <section class="panel"><h2>Importované testy</h2>${testRows(sortedTests().filter(t => t.source !== 'EasyAuto'))}</section>
-    </div>`;
-}
-
-function doImport(payload, jump = true) {
-  const test = importResult(payload, byId, ministryIds, bank.questions);
-  const existing = state.tests.find(t => t.signature === test.signature);
-  if (!existing) {
-    state.tests.push(test);
-    save();
-    notify(`Test uložen · ${test.items.filter(i => i.id).length} / ${test.items.length} otázek spárováno.`);
-  } else {
-    notify('Tento test je už uložený.');
-  }
-  const id = (existing ?? test).id;
-  if (jump) go(`historie/${id}`);
-  return id;
-}
-
-async function importFiles(files) {
-  let id;
-  const errors = [];
-  for (const file of files) {
-    try {
-      if (file.size > 10_000_000) throw new Error('Soubor je větší než 10 MB.');
-      const contents = await file.text();
-      if (file.name.toLowerCase().endsWith('.json')) {
-        const data = JSON.parse(contents);
-        id = doImport(data.html ?? data.result ?? data, false);
-      } else id = doImport(contents, false);
-    } catch (error) {
-      errors.push(`${file.name} · ${error.message}`);
-    }
-  }
-  if (id) go(`historie/${id}`);
-  if (errors.length) notify(errors.join(' | '));
-}
-
 function render() {
   const [page, sub] = route();
+  main.dataset.view = page;
   navMarkup(page);
   const views = {
     prehled: overview,
@@ -534,9 +484,8 @@ function render() {
     zkouska: examMarkup,
     otazky: catalogMarkup,
     historie: () => historyMarkup(sub),
-    import: importMarkup,
   };
-  main.innerHTML = (Object.hasOwn(views, page) ? views[page] : overview)();
+  main.innerHTML = views[page]();
   if (page === 'prehled') {
     const source = document.createElement('footer');
     source.className = 'source';
@@ -548,8 +497,6 @@ function render() {
     source.append('Zdroj otázek · ', citation, ` · vydání ${new Date(bulletin + 'T12:00:00').toLocaleDateString('cs-CZ')}`);
     main.append(source);
   }
-  const bookmark = $('#bookmarklet');
-  if (bookmark) bookmark.href = bookmarklet(new URL('#import', location.href).href);
 }
 
 function routeChanged() {
@@ -593,7 +540,8 @@ function questionDialog(q, options = {}) {
   const choice = options.choice ?? null;
   const reveal = options.reveal ?? s === 'known';
   const feedback = choice ? (choice === q.correct_answer ? 'Správně' : 'Špatně') : 'Otázka';
-  showDialog(feedback, `<div class="row between"><small>${q.id} · ${topicName(q)} · ${q.points} b.</small>${label(s)}</div>
+  showDialog(feedback, `<div class="row between question-hud">
+    <div class="row"><span class="question-code">${q.id}</span><span>${topicName(q)} · ${q.points} b.</span></div>${label(s)}</div>
     ${questionMarkup(q, choice, reveal, 'dialog-answer', reveal)}
     <div class="row between"><small>Odpovědi · ${stat?.seen ?? 0} celkem · ${stat?.correct ?? 0} správně · ${stat?.wrong ?? 0} špatně · řada ${stat?.streak ?? 0}</small>${flagButton(q)}</div>
     <div class="row">${reveal ? '' : button('reveal', 'Ukázat odpověď')}
@@ -803,8 +751,7 @@ function installEvents() {
         if (!state.exam) examVisit = null;
         else if (visitId !== state.exam.ids[state.exam.index] || !examVisit) visitExamQuestion();
       }
-      if (page === 'import') navMarkup(page);
-      else render();
+      render();
     } catch { /* Ignore incompatible records from another tab. */ }
   });
   $('.skip').addEventListener('click', event => {
@@ -840,11 +787,7 @@ function installEvents() {
     if (trigger && !trigger.disabled && Object.hasOwn(actions, trigger.dataset.action)) {
       actions[trigger.dataset.action](trigger.dataset.value);
     }
-    if (event.target.closest('#bookmarklet')) {
-      event.preventDefault();
-      notify('Přetáhni tlačítko do lišty záložek prohlížeče.');
-    }
-    if (event.target.closest('dialog a[href^="#"]:not(#bookmarklet)')) closeDialog();
+    if (event.target.closest('dialog a[href^="#"]')) closeDialog();
   });
   document.addEventListener('input', event => {
     const input = event.target;
@@ -874,9 +817,8 @@ function installEvents() {
       render();
       $('#mistake-topic')?.focus();
     }
-    if (input.id === 'result-files') void importFiles([...input.files]);
   });
-  document.addEventListener('submit', async event => {
+  document.addEventListener('submit', event => {
     const form = event.target;
     if (form.id === 'profile-form') {
       event.preventDefault();
@@ -888,42 +830,6 @@ function installEvents() {
       navMarkup(route()[0]);
       closeDialog();
       notify('Profil uložen.');
-    }
-    if (form.id === 'result-url') {
-      event.preventDefault();
-      const value = String(new FormData(form).get('url')).trim();
-      if (!isResultUrl(value)) return notify('Vlož odkaz na detail vyhodnocení z autoskola-testy.cz.');
-      const submit = $('button[type="submit"]', form);
-      submit.disabled = true;
-      try {
-        const response = await fetch(value, { signal: AbortSignal.timeout(6000) });
-        if (!response.ok) throw new Error();
-        doImport(await response.text());
-      } catch {
-        lastOpenedResult = value;
-        if (route()[0] === 'import') render();
-        notify('Otevři odkaz a pro přenos výsledku použij záložku „Do EasyAuto“.');
-      } finally {
-        submit.disabled = false;
-      }
-    }
-  });
-  for (const name of ['dragover', 'drop']) {
-    document.addEventListener(name, event => {
-      if (!event.target.closest('#file-drop')) return;
-      event.preventDefault();
-      if (name === 'drop') void importFiles([...event.dataTransfer.files]);
-    });
-  }
-  window.addEventListener('message', event => {
-    let origin;
-    try { origin = new URL(event.origin); } catch { return; }
-    if (origin.protocol !== 'https:' || !resultHosts.has(origin.hostname) || event.data?.type !== 'easyauto-result') return;
-    event.source?.postMessage('easyauto-received', event.origin);
-    try {
-      doImport(event.data.html ?? event.data.result);
-    } catch (error) {
-      notify(error.message);
     }
   });
   document.addEventListener('keydown', event => {
@@ -989,7 +895,6 @@ async function start() {
   bulletin = source.bulletin_date;
   byId = new Map(bank.questions.map(q => [q.id, q]));
   groupB = licences.group_b.map(id => byId.get(id)).filter(Boolean);
-  ministryIds = licences.question_codes_by_ministry_id;
   stats = questionStats(state);
   installEvents();
   routeChanged();

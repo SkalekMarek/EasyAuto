@@ -5,7 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="Příprava na českou autoškolu s oficiálními otázkami Ministerstva dopravy.">
     <meta name="color-scheme" content="light dark">
+    <meta name="theme-color" content="#191126">
     <title>EasyAuto · Příprava na autoškolu</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="./assets/easyauto-logo.png">
+    <link rel="preload" href="./assets/fonts/pixelify-latin.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="./assets/fonts/press-start-latin.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet" href="./styles.css">
     <script type="module" src="./src/app.js"></script>
   </head>
@@ -13,10 +17,15 @@
     <a class="skip" href="#main">Přeskočit na obsah</a>
     <div class="layout">
       <aside class="sidebar">
-        <a class="brand" href="#prehled"><span class="mark" aria-hidden="true">E</span><span>EasyAuto<small>Příprava na autoškolu</small></span></a>
+        <a class="brand" href="#prehled">
+          <span class="mark"><img src="./assets/easyauto-logo.png" alt="" width="48" height="48"></span>
+          <span>Easy<span class="brand-accent">Auto</span><small>Příprava na autoškolu</small></span>
+        </a>
         <button class="mobile-menu" id="mobile-menu" type="button" aria-expanded="false" aria-controls="sidebar-content">Menu</button>
         <div id="sidebar-content" class="sidebar-content">
-          <button class="search-button" type="button" data-action="search">Hledat otázku <kbd>Ctrl K</kbd></button>
+          <button class="search-button" type="button" data-action="search">
+            <span class="sprite sprite-search" aria-hidden="true"></span>Hledat <kbd>Ctrl K</kbd>
+          </button>
           <nav id="navigation" aria-label="Hlavní navigace"></nav>
           <div class="sidebar-footer"><button type="button" data-action="profile" id="profile-button">Můj profil</button></div>
         </div>

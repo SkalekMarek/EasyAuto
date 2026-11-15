@@ -13,7 +13,7 @@ export const TOPICS = new Map([
 
 export const STATUS = { unseen: 'Nezodpovězená', wrong: 'V chybovníku', known: 'Zvládnutá' };
 
-export const newState = () => ({ practice: [], tests: [], flagged: [], exam: null, profile: {}, theme: 'system' });
+export const newState = () => ({ practice: [], tests: [], flagged: [], exam: null, profile: {}, theme: 'dark' });
 
 export function questionStats(state) {
   const stats = new Map();
