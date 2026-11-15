@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="cs">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Příprava na českou autoškolu s oficiálními otázkami Ministerstva dopravy.">
+    <meta name="color-scheme" content="light dark">
+    <title>EasyAuto · Příprava na autoškolu</title>
+    <link rel="stylesheet" href="./styles.css">
+    <script type="module" src="./src/app.js"></script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Přeskočit na obsah</a>
+    <div class="layout">
+      <aside class="sidebar">
+        <a class="brand" href="#prehled"><span class="mark" aria-hidden="true">E</span><span>EasyAuto<small>Příprava na autoškolu</small></span></a>
+        <button class="mobile-menu" id="mobile-menu" type="button" aria-expanded="false" aria-controls="sidebar-content">Menu</button>
+        <div id="sidebar-content" class="sidebar-content">
+          <button class="search-button" type="button" data-action="search">Hledat otázku <kbd>Ctrl K</kbd></button>
+          <nav id="navigation" aria-label="Hlavní navigace"></nav>
+          <div class="sidebar-footer"><button type="button" data-action="profile" id="profile-button">Můj profil</button></div>
+        </div>
+      </aside>
+      <main id="main" tabindex="-1"><p role="status">Načítám otázky…</p></main>
+    </div>
+    <dialog id="dialog" aria-labelledby="dialog-title"></dialog>
+    <div id="notice" class="notice" role="status" aria-live="polite"></div>
+    <noscript>EasyAuto potřebuje zapnutý JavaScript.</noscript>
+  </body>
+</html>

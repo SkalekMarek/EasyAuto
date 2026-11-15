@@ -1,0 +1,7 @@
+czech-driving-licence/media/*
+!czech-driving-licence/media/RP1401001.png
+!czech-driving-licence/media/RP1401003.png
+!czech-driving-licence/media/RP1401004.png
+!czech-driving-licence/media/RP1401006.png
+node_modules/
+__pycache__/
