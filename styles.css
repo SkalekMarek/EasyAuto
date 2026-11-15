@@ -1,15 +1,7 @@
 @font-face {
-  font-family: Pixelify;
-  src: url("./assets/fonts/pixelify-latin.woff2") format("woff2");
-  font-weight: 400 700;
+  font-family: "Departure Mono";
+  src: url("./assets/fonts/departure-mono.woff2") format("woff2");
   font-display: block;
-}
-@font-face {
-  font-family: Pixelify;
-  src: url("./assets/fonts/pixelify-latin-ext.woff2") format("woff2");
-  font-weight: 400 700;
-  font-display: block;
-  unicode-range: U+0100-02BA, U+02C7, U+02D8-02DD, U+0304, U+0308, U+1E00-1EFF;
 }
 @font-face {
   font-family: PressStart;
@@ -25,9 +17,10 @@
 
 :root {
   color-scheme: dark;
-  font-family: Pixelify, PressStart, monospace;
+  --body-font: "Departure Mono", PressStart, monospace;
+  --display: PressStart, "Departure Mono", monospace;
+  font-family: var(--body-font);
   font-synthesis: none;
-  --display: PressStart, Pixelify, monospace;
   --bg: #191126;
   --grid-ink: #241932;
   --surface: #261c3b;
@@ -196,7 +189,7 @@ button:disabled { cursor: default; opacity: .55; }
 .brand-accent { color: var(--gold); }
 .brand small {
   display: block; margin-top: 4px; color: var(--muted);
-  font: 14px / 1.2 Pixelify, PressStart, monospace;
+  font: 14px / 1.35 var(--body-font);
   text-transform: none;
 }
 .mark {
@@ -212,7 +205,7 @@ kbd {
   padding: 2px 5px;
   border: 2px solid currentColor;
   border-radius: 0;
-  font: 15px / 1 Pixelify, PressStart, monospace;
+  font: 15px / 1 var(--body-font);
   white-space: nowrap;
 }
 nav { display: grid; gap: 6px; }
@@ -400,7 +393,7 @@ small { font-size: 15px; }
 .legend .wrong::before { background: var(--map-wrong); }
 .legend .known::before { background: var(--map-known); }
 .map-group { display: grid; gap: 8px; margin-top: 20px; }
-.map-group h3 small { margin-left: 4px; font-family: Pixelify, PressStart, monospace; }
+.map-group h3 small { margin-left: 4px; font-family: var(--body-font); }
 .map { display: grid; grid-template-columns: repeat(auto-fill, minmax(18px, 1fr)); gap: 4px; }
 .cell {
   min-height: 18px; aspect-ratio: 1;
@@ -481,7 +474,7 @@ label.field { display: grid; gap: 5px; min-width: 0; font-weight: 600; }
 }
 .question-prompt::before { top: -2px; left: -2px; }
 .question-prompt::after { bottom: -2px; right: -2px; }
-.question-text { font-size: 22px; font-weight: 600; }
+.question-text { font-size: 22px; line-height: 1.5; }
 .question-media { display: block; max-height: 400px; max-width: 100%; object-fit: contain; image-rendering: auto; }
 .question-card { max-width: 940px; }
 .question-card, .exam-question { border-left: 4px solid var(--mode-strong); }
@@ -489,7 +482,7 @@ label.field { display: grid; gap: 5px; min-width: 0; font-weight: 600; }
 .answer {
   display: flex; gap: 12px; align-items: center; justify-content: flex-start;
   min-width: 0; padding: 12px; border: 2px solid var(--frame);
-  font-size: 18px; font-weight: 500; line-height: 1.4; text-align: start;
+  font-size: 22px; line-height: 1.5; text-align: start;
 }
 .answer kbd {
   flex: 0 0 30px; min-height: 28px;
@@ -577,6 +570,7 @@ dialog::backdrop { background: #10081dd4; }
   .hero-copy::before { display: none; }
   .hero-copy p { margin-top: 7px; }
   .hero-copy .tools { margin-top: 11px; }
+  .hero-copy .button { font-size: 16px; }
   .metric-grid { grid-template-columns: 1fr; gap: 8px; }
   .metric { min-height: 49px; padding: 6px 10px; gap: 8px; border-top: 3px solid var(--frame); border-left: 4px solid var(--metric-color); }
   .metric-icon { flex-basis: 26px; width: 26px; height: 26px; clip-path: none; }
@@ -589,7 +583,7 @@ dialog::backdrop { background: #10081dd4; }
   .list-row .row { justify-content: flex-end; }
   .question-text { font-size: 20px; }
   .question-prompt { padding: 12px; }
-  .answer { flex-wrap: wrap; font-size: 17px; }
+  .answer { flex-wrap: wrap; font-size: 20px; }
   .answer-body { flex: 1 1 calc(100% - 44px); }
   dialog { padding: 12px; }
 }
