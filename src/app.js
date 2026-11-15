@@ -9,6 +9,33 @@ const main = $('#main');
 const dialog = $('#dialog');
 const storageKey = 'easyauto-progress-v1';
 const mediaQuery = matchMedia('(prefers-color-scheme: dark)');
+const pixelArt = new ResizeObserver(entries => {
+  for (const { target, contentRect } of entries) {
+    const art = target.firstElementChild;
+    const sourceWidth = Number(art.getAttribute('width'));
+    const sourceHeight = Number(art.getAttribute('height'));
+    const density = window.devicePixelRatio;
+    const width = contentRect.width * density;
+    const height = contentRect.height * density;
+    const cover = target.dataset.pixelFit === 'cover';
+    const fitX = width / sourceWidth;
+    const fitY = height / sourceHeight;
+    // Use the same whole device-pixel multiplier on both axes.
+    const scale = Math.max(1, cover ? Math.ceil(Math.max(fitX, fitY)) : Math.floor(Math.min(fitX, fitY)));
+    const artWidth = sourceWidth * scale;
+    const artHeight = sourceHeight * scale;
+    const box = target.getBoundingClientRect();
+    const x = (box.left + target.clientLeft) * density;
+    const y = (box.top + target.clientTop) * density;
+    art.style.width = `${artWidth / density}px`;
+    art.style.height = `${artHeight / density}px`;
+    art.style.left = `${(Math.round(x + (width - artWidth) / 2) - x) / density}px`;
+    art.style.top = `${(Math.round(y + (height - artHeight) / 2) - y) / density}px`;
+  }
+});
+const pixelBox = {
+  box: 'devicePixelContentBoxSize' in ResizeObserverEntry.prototype ? 'device-pixel-content-box' : 'content-box',
+};
 const navigation = [
   ['prehled', 'Přehled', 'map'], ['procvicovani', 'Procvičování', 'target'], ['chybovnik', 'Chybovník', 'retry'],
   ['nerozumim', 'Nerozumím', 'help'], ['zkouska', 'Cvičná zkouška', 'flag'], ['otazky', 'Otázky', 'book'],
@@ -163,7 +190,7 @@ function overview() {
         <div class="tools">${link('procvicovani', 'Procvičovat', true)}
           ${link('zkouska', state.exam ? 'Pokračovat ve zkoušce' : 'Cvičná zkouška')}</div>
       </div>
-      <div class="hero-scene" aria-hidden="true"><img src="./assets/arcade-road.png" alt="" width="160" height="88"></div>
+      <div class="hero-scene" data-pixel-fit="cover" aria-hidden="true"><img src="./assets/ibiza-road.png" alt="" width="128" height="72"></div>
     </header>
     <div class="stack">
       <div class="grid grid-3 metric-grid">
@@ -474,6 +501,8 @@ function historyMarkup(id) {
 
 function render() {
   const [page, sub] = route();
+  const oldScene = $('.hero-scene');
+  if (oldScene) pixelArt.unobserve(oldScene);
   main.dataset.view = page;
   navMarkup(page);
   const views = {
@@ -487,6 +516,7 @@ function render() {
   };
   main.innerHTML = views[page]();
   if (page === 'prehled') {
+    pixelArt.observe($('.hero-scene'), pixelBox);
     const source = document.createElement('footer');
     source.className = 'source';
     const citation = document.createElement('a');
@@ -737,6 +767,7 @@ const actions = {
 };
 
 function installEvents() {
+  pixelArt.observe($('.mark'), pixelBox);
   window.addEventListener('hashchange', routeChanged);
   window.addEventListener('storage', event => {
     if (event.key !== storageKey) return;
